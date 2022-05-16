@@ -15,6 +15,22 @@ def reformat_1D_to_2D(array,Lx,Ly):
     return reformatted_array
 
 ####################### FUNCTIONS FOR FLOW FIELD #############################
+def grid_cell_edges_in_meters(L,del_m):
+    """
+    L: grid cell length of the dimension
+    del_m: size of grid cell in meters
+
+    returns the distance of the cell edges (grid_edges) in meters from the first grid cell
+    and the location in meters of center of the grid (grid_center)
+    """
+    grid_edges = [0.0]
+    for c in np.arange(1,L):
+        grid_edges.append(grid_edges[c-1]+del_m)
+    grid_edges = np.array(grid_edges)
+    grid_center = grid_edges[-1]/2
+
+    return grid_edges,grid_center
+
 def Acoefficients_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,spinup,alter_vort):
     """
     del_x: size of grid cell in x direction (m)
@@ -29,18 +45,10 @@ def Acoefficients_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,spinup,alter_vo
     A_ijminus1, A_ijplus1, A_iminus1j, A_iplus1j, A_ij, vort = [],[],[],[],[],[]
 
     # Get center cells for vorticity
-    x_grid = [0.0]
-    for x in np.arange(1,Lx):
-        x_grid.append(x_grid[x-1]+del_x)
-    x_grid = np.array(x_grid)
-    xc = x_grid[-1]/2 #center x-coord of grid
+    x_grid,xc = grid_cell_edges_in_meters(Lx,del_x) #center x-coord of grid
+    y_grid,yc = grid_cell_edges_in_meters(Ly,del_y) #center x-coord of grid
 
-    y_grid = [0.0]
-    for y in np.arange(1,Ly):
-        y_grid.append(y_grid[y-1]+del_y)
-    y_grid = np.array(y_grid)
-    yc = y_grid[-1]/2 #center z-coord of grid
-
+    # Set up vorticity equation
     if spinup == 0:
         A = del_x/2
     else:
@@ -62,6 +70,7 @@ def Acoefficients_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,spinup,alter_vo
     delx_over_dely2 = del_x/(del_y**2)
     dely_over_delx2 = del_y/(del_x**2)
 
+    # Solve the A coefficients
     for j in np.arange(0,Ly):
         for i in np.arange(0,Lx):
             A_ijminus1.append(delx_over_dely2)
@@ -100,30 +109,29 @@ def Atimesvector_2D_nonperiodic(Lx, Ly, Aijminus1, Aijplus1, Aiminus1j, Aiplus1j
             iminus1j_ind = j*Lx + i - 1
             iplus1j_ind = j*Lx + i + 1
 
-            if j == 0: #bottom; j-1 term gone
-                if i == 0: # bottom west corner
-                    Axvector.append(Aijplus1[ij_ind]*di[ijplus1_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                elif i == (Lx - 1): # bottom east corner
-                    Axvector.append(Aijplus1[ij_ind]*di[ijplus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                else: # bottom edge
-                    Axvector.append(Aijplus1[ij_ind]*di[ijplus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
+            # south to north index j
+            if j == 0: #south side; j-1 term gone
+                ijminus1_term = 0
+                ijplus1_term = Aijplus1[ij_ind]*di[ijplus1_ind]
+            elif j == (Ly - 1): #north side; j+1 term gone
+                ijminus1_term = Aijminus1[ij_ind]*di[ijminus1_ind]
+                ijplus1_term = 0
+            else: #middle
+                ijminus1_term = Aijminus1[ij_ind]*di[ijminus1_ind]
+                ijplus1_term = Aijplus1[ij_ind]*di[ijplus1_ind]
 
-            elif j == (Ly - 1): #top; j+1 term gone
-                if i == 0: # top west corner
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                elif i == (Lx - 1): # top east corner
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                else: # top edge
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
+            # west to east index i
+            if i == 0: # west side; i-1 term gone
+                iminus1j_term = 0
+                iplus1j_term = Aiplus1j[ij_ind]*di[iplus1j_ind]
+            elif: # east side; i+1 term gone
+                iminus1j_term = Aiminus1j[ij_ind]*di[iminus1j_ind]
+                iplus1j_term = 0
+            else: #middle
+                iminus1j_term = Aiminus1j[ij_ind]*di[iminus1j_ind]
+                iplus1j_term = Aiplus1j[ij_ind]*di[iplus1j_ind]
 
-            else:
-                if i == 0: #west edge
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aijplus1[ij_ind]*di[ijplus1_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                elif i == (Lx - 1): #east edge
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aijplus1[ij_ind]*di[ijplus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aij[ij_ind]*di[ij_ind])
-                else: #middle cells
-                    Axvector.append(Aijminus1[ij_ind]*di[ijminus1_ind] + Aijplus1[ij_ind]*di[ijplus1_ind] + Aiminus1j[ij_ind]*di[iminus1j_ind] + Aiplus1j[ij_ind]*di[iplus1j_ind] + Aij[ij_ind]*di[ij_ind])
-
+            Axvector.append(ijminus1_term + ijplus1_term + iminus1j_term + iplus1j_term + Aij[ij_ind]*di[ij_ind])
     return Axvector
 
 def krylov_solve(ri,di,Adi,Pm):
@@ -224,7 +232,7 @@ def abs_value_avg(vel):
 
 def upwind_fluxes_2D(phi_n,Lx,i,j,u,v):
     """
-    Solve the 1st order upwind fluxes
+    Solve the 1st order upwind fluxes for advection
     """
 
     #phi-specific indeces, grid length Lx-1
@@ -273,3 +281,86 @@ def diffusive_fluxes_2D(phi_n,Lx,i,j,del_x,del_y):
     Fs = kappa*del_x*((phi_n[ij_ind] - phi_n[ijminus1_ind])/del_y)
 
     return Fw,Fe,Fs,Fn
+
+####################### MODEL SIMULATION #############################
+def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_vort,P_combo):
+    """
+    u: velocity function
+    phi_0: western boundary condition
+    phi_m: easter boundary condition
+    del_x: spatial step
+    del_t: time step
+    num_steps: number of time steps to take
+    alter_vort: [0,1] if 0, vorticity will NOT vary; if 1, vorticity will vary
+    P_combo: Combination of phytoplankton in model:
+                - 'L': 1 large phytoplankton cell type
+                - 'S': 1 small phytoplankton cell type
+                - 'SL': 1 large phytoplankton cell type + 1 small phytoplankton cell type
+    """
+
+    #Initialize center tracer
+    mu_max = 1.4/(24*60*60) #max growth rate d^-1, converted to s^-1
+    kN = 0.24*1000#*del_x*del_y #half saturation, converted mu M to mu mol N m^-2
+    m = 0.5/(24*60*60) #death rate; s^-1
+    N_star = (m*kN)/(mu_max - m) # mu mol N m^-2
+    P_star = 0.1*1000#*del_x*del_y # mu mol N m^-2; 0.1 was an arbitrary choice
+    SN_star = (mu_max*N_star*P_star)/(N_star + kN) # m mol N m^-2 s^-1
+
+    P_n = np.full(((Lx-1)*(Ly-1)),P_star) #phytoplankton initial & boundary conditions
+    N_n = np.full(((Lx-1)*(Ly-1)),N_star) #nutrients initial & boundary conditions
+
+    # Set up matrix to save the data
+    P_mat,N_mat = [],[]
+    P_mat.append(P_n)
+    N_mat.append(N_n)
+
+    # Set up the streamfunction and velocity field
+    time = del_t # initialize with 1 time step to avoid errors with velocity being 0
+    psi = krylov_solve_2D_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,1,0)
+    u,v = velocity_from_streamfunction(psi,Lx,Ly,del_x,del_y)
+    psi_mat = []
+    psi_mat.append(psi)
+
+    # Time step forward delta t to find phi_n+1
+    for t in np.arange(0,num_steps): # number of time steps
+        time = time + del_t
+
+        if t%100 == 0:
+            print(t)
+
+        P_n1 = P_n.copy()
+        N_n1 = N_n.copy()
+
+        psi = krylov_solve_2D_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,1,alter_vort)
+        psi_mat.append(psi)
+        u,v = velocity_from_streamfunction(psi,Lx,Ly,del_x,del_y)
+
+        for j in np.arange(1,Ly-2):
+            for i in np.arange(1,Lx-2): # only iterate after the first cell and before the last
+
+                # Indeces for phi matrix
+                ij_ind = j*(Lx-1) + i # Index for tracers
+                ij_psi_ind = j*Lx + i #Index for streamfunction
+
+                # Solve the tracer fluxes
+                P_Aw,P_Ae,P_As,P_An = upwind_fluxes_2D(P_n,Lx,i,j,u,v)
+                N_Aw,N_Ae,N_As,N_An = upwind_fluxes_2D(N_n,Lx,i,j,u,v)
+                P_Dw,P_De,P_Ds,P_Dn = diffusive_fluxes_2D(P_n,Lx,i,j,del_x,del_y)
+                N_Dw,N_De,N_Ds,N_Dn = diffusive_fluxes_2D(N_n,Lx,i,j,del_x,del_y)
+
+                # Solve tracers at the next time step
+                P_n1[ij_ind] = P_n[ij_ind] + del_t*(((P_Aw-P_Ae)/del_x) + ((P_As-P_An)/del_y) + ((P_De-P_Dw)/del_x) + ((P_Dn-P_Ds)/del_y) + ((mu_max*N_n[ij_ind])/(N_n[ij_ind] + kN) - m)*P_n[ij_ind])
+
+                if psi[ij_psi_ind] < -10000: #when streamfunction is high increase supply rate
+                    SN = 3*SN_star
+                else:
+                    SN = SN_star
+
+                N_n1[ij_ind] = N_n[ij_ind] + del_t*(((N_Aw-N_Ae)/del_x) + ((N_As-N_An)/del_y) + ((N_De-N_Dw)/del_x) + ((N_Dn-N_Ds)/del_y) + SN - ((mu_max*N_n[ij_ind])/(N_n[ij_ind] + kN))*P_n[ij_ind])
+
+        P_mat.append(P_n1)
+        N_mat.append(N_n1)
+        P_n = P_n1.copy()
+        N_n = N_n1.copy()
+
+    return P_mat,N_mat,psi_mat,N_star,P_star
