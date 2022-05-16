@@ -1,4 +1,6 @@
 # Version 2 gives the option to spin the vorticity up and down
+## Lexi Jones
+## Last edited: 05/16/22
 
 import numpy as np
 
@@ -283,36 +285,44 @@ def diffusive_fluxes_2D(phi_n,Lx,i,j,del_x,del_y):
     return Fw,Fe,Fs,Fn
 
 ####################### MODEL SIMULATION #############################
-def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_vort,P_combo):
+
+#Phytoplankton constants
+mu_max_S = 1.4/(24*60*60) #max growth rate of small pp; d^-1, converted to s^-1
+mu_max_L = 2.5/(24*60*60) #max growth rate of large pp
+kN_S = 0.24*1000#half saturation, converted mu M to mu mol N m^-2 (assuming grid cell depth of 1 m)
+kN_L = 0.24*1000
+N_star_S = (m*kN_S)/(mu_max_S - m) #equilibrium resource requirement
+N_star_L = (m*kN_L)/(mu_max_L - m)
+
+def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_vort,P_combo,death_rate):
     """
-    u: velocity function
-    phi_0: western boundary condition
-    phi_m: easter boundary condition
-    del_x: spatial step
+    Lx,Ly: Number of grid cells in the x and y directions
+    del_x,del_y: spatial step size (in meters) in the x and y directions
     del_t: time step
     num_steps: number of time steps to take
     alter_vort: [0,1] if 0, vorticity will NOT vary; if 1, vorticity will vary
+    death_rate: constant; d^-1
     P_combo: Combination of phytoplankton in model:
-                - 'L': 1 large phytoplankton cell type
-                - 'S': 1 small phytoplankton cell type
-                - 'SL': 1 large phytoplankton cell type + 1 small phytoplankton cell type
+            - 'L': 1 large phytoplankton cell type
+            - 'S': 1 small phytoplankton cell type
     """
 
-    #Initialize center tracer
-    mu_max = 1.4/(24*60*60) #max growth rate d^-1, converted to s^-1
-    kN = 0.24*1000#*del_x*del_y #half saturation, converted mu M to mu mol N m^-2
-    m = 0.5/(24*60*60) #death rate; s^-1
-    N_star = (m*kN)/(mu_max - m) # mu mol N m^-2
-    P_star = 0.1*1000#*del_x*del_y # mu mol N m^-2; 0.1 was an arbitrary choice
-    SN_star = (mu_max*N_star*P_star)/(N_star + kN) # m mol N m^-2 s^-1
+    # Set up background nutrient concentration and supply rate
+    m = death_rate/(24*60*60)
+    P_star = 0.1*1000 # mu mol N m^-2
+    if P_combo == 'S':
+        N_star = N_star_S
+        SN_star = (mu_max_S*N_star_S*P_star)/(N_star_S + kN_S)
+    elif P_combo == 'L':
+        N_star = N_star_L
+        SN_star = (mu_max_L*N_star*P_star)/(N_star + kN_L)
 
-    P_n = np.full(((Lx-1)*(Ly-1)),P_star) #phytoplankton initial & boundary conditions
+    # Initialize the tracers & set up the matrices to save the data
     N_n = np.full(((Lx-1)*(Ly-1)),N_star) #nutrients initial & boundary conditions
-
-    # Set up matrix to save the data
-    P_mat,N_mat = [],[]
-    P_mat.append(P_n)
+    P_n = np.full(((Lx-1)*(Ly-1)),P_star)
+    N_mat,P_mat = [],[]
     N_mat.append(N_n)
+    P_mat.append(P_n)
 
     # Set up the streamfunction and velocity field
     time = del_t # initialize with 1 time step to avoid errors with velocity being 0
@@ -364,3 +374,95 @@ def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_
         N_n = N_n1.copy()
 
     return P_mat,N_mat,psi_mat,N_star,P_star
+
+def FE_upwind_2D_adv_diff_eddy_NPP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_vort,P_combo,death_rate):
+    """
+    Lx,Ly: Number of grid cells in the x and y directions
+    del_x,del_y: spatial step size (in meters) in the x and y directions
+    del_t: time step
+    num_steps: number of time steps to take
+    alter_vort: [0,1] if 0, vorticity will NOT vary; if 1, vorticity will vary
+    death_rate: constant; d^-1
+    P_combo: Combination of phytoplankton in model:
+            - 'SLe': 1 large + 1 small; even initial concentrations
+            - 'SLu': 1 large + 1 small; uneven initial concentrations
+    """
+
+    # Set up background nutrient concentration and supply rate
+    m = death_rate/(24*60*60)
+    N_star = N_star_S + N_star_L
+    P_star_S = 0.1*1000
+    if P_combo == 'SLe': #even initial concentrations of small & large
+        P_star_L = 0.1*1000
+    elif P_combo == 'SLu': # large population is 1/5th the size of the small
+        P_star_L = (0.1/5)*1000
+    SN_star = (mu_max_S*N_star*P_star_S)/(N_star + kN_S) + (mu_max_L*N_star*P_star_L)/(N_star + kN_L)
+
+    # Initialize the tracers & set up the matrices to save the data
+    PL_n = np.full(((Lx-1)*(Ly-1)),P_star_L) #large phytoplankton
+    PS_n = np.full(((Lx-1)*(Ly-1)),P_star_S) #small phytoplankton
+    N_n = np.full(((Lx-1)*(Ly-1)),N_star) #nutrients
+    PL_mat,PS_mat,N_mat = [],[],[]
+    PL_mat.append(PL_n)
+    PS_mat.append(PS_n)
+    N_mat.append(N_n)
+
+    # Set up the streamfunction and velocity field
+    time = del_t # initialize with 1 time step to avoid errors with velocity being 0
+    psi = krylov_solve_2D_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,1,0)
+    u,v = velocity_from_streamfunction(psi,Lx,Ly,del_x,del_y)
+    psi_mat = []
+    psi_mat.append(psi)
+
+    # Time step forward delta t to find phi_n+1
+    for t in np.arange(0,num_steps): # number of time steps
+        time = time + del_t
+
+        if t%100 == 0:
+            print(t)
+
+        PL_n1 = PL_n.copy()
+        PS_n1 = PS_n.copy()
+        N_n1 = N_n.copy()
+
+        psi = krylov_solve_2D_elliptic_streamfunction(Lx,Ly,del_x,del_y,time,1,alter_vort)
+        psi_mat.append(psi)
+        u,v = velocity_from_streamfunction(psi,Lx,Ly,del_x,del_y)
+
+        for j in np.arange(1,Ly-2):
+            for i in np.arange(1,Lx-2): # only iterate after the first cell and before the last
+
+                # Indeces for phi matrix
+                ij_ind = j*(Lx-1) + i # Index for tracers
+                ij_psi_ind = j*Lx + i #Index for streamfunction
+
+                # Solve the advective tracer fluxes
+                PL_Aw,PL_Ae,PL_As,PL_An = upwind_fluxes_2D(PL_n,Lx,i,j,u,v)
+                PS_Aw,PS_Ae,PS_As,PS_An = upwind_fluxes_2D(PS_n,Lx,i,j,u,v)
+                N_Aw,N_Ae,N_As,N_An = upwind_fluxes_2D(N_n,Lx,i,j,u,v)
+
+                # Solve the diffusive
+                PL_Dw,PL_De,PL_Ds,PL_Dn = diffusive_fluxes_2D(PL_n,Lx,i,j,del_x,del_y)
+                PS_Dw,PS_De,PS_Ds,PS_Dn = diffusive_fluxes_2D(PS_n,Lx,i,j,del_x,del_y)
+                N_Dw,N_De,N_Ds,N_Dn = diffusive_fluxes_2D(N_n,Lx,i,j,del_x,del_y)
+
+                # Solve tracers at the next time step
+                PL_n1[ij_ind] = PL_n[ij_ind] + del_t*(((PL_Aw-PL_Ae)/del_x) + ((PL_As-PL_An)/del_y) + ((PL_De-PL_Dw)/del_x) + ((PL_Dn-PL_Ds)/del_y) + ((mu_max_L*N_n[ij_ind])/(N_n[ij_ind] + kN_L) - m)*PL_n[ij_ind])
+                PS_n1[ij_ind] = PS_n[ij_ind] + del_t*(((PS_Aw-PS_Ae)/del_x) + ((PS_As-PS_An)/del_y) + ((PS_De-PS_Dw)/del_x) + ((PS_Dn-PS_Ds)/del_y) + ((mu_max_S*N_n[ij_ind])/(N_n[ij_ind] + kN_S) - m)*PS_n[ij_ind])
+
+                if psi[ij_psi_ind] < -10000: #when streamfunction is high add nutrients
+                    SN = 3*SN_star
+                else:
+                    SN = SN_star
+
+                N_n1[ij_ind] = N_n[ij_ind] + del_t*(((N_Aw-N_Ae)/del_x) + ((N_As-N_An)/del_y) + ((N_De-N_Dw)/del_x) + ((N_Dn-N_Ds)/del_y) + SN - ((mu_max_L*N_n[ij_ind])/(N_n[ij_ind] + kN_L))*PL_n[ij_ind] - ((mu_max_S*N_n[ij_ind])/(N_n[ij_ind] + kN_S))*PS_n[ij_ind])
+
+        PL_mat.append(PL_n1)
+        PS_mat.append(PS_n1)
+        N_mat.append(N_n1)
+
+        PL_n = PL_n1.copy()
+        PS_n = PS_n1.copy()
+        N_n = N_n1.copy()
+
+    return PL_mat,PS_mat,N_mat,psi_mat,N_star,P_star_S,P_star_L
