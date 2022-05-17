@@ -126,7 +126,7 @@ def Atimesvector_2D_nonperiodic(Lx, Ly, Aijminus1, Aijplus1, Aiminus1j, Aiplus1j
             if i == 0: # west side; i-1 term gone
                 iminus1j_term = 0
                 iplus1j_term = Aiplus1j[ij_ind]*di[iplus1j_ind]
-            elif: # east side; i+1 term gone
+            elif i == (Lx - 1): # east side; i+1 term gone
                 iminus1j_term = Aiminus1j[ij_ind]*di[iminus1j_ind]
                 iplus1j_term = 0
             else: #middle
@@ -291,8 +291,6 @@ mu_max_S = 1.4/(24*60*60) #max growth rate of small pp; d^-1, converted to s^-1
 mu_max_L = 2.5/(24*60*60) #max growth rate of large pp
 kN_S = 0.24*1000#half saturation, converted mu M to mu mol N m^-2 (assuming grid cell depth of 1 m)
 kN_L = 0.24*1000
-N_star_S = (m*kN_S)/(mu_max_S - m) #equilibrium resource requirement
-N_star_L = (m*kN_L)/(mu_max_L - m)
 
 def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_vort,P_combo,death_rate):
     """
@@ -309,11 +307,17 @@ def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_
 
     # Set up background nutrient concentration and supply rate
     m = death_rate/(24*60*60)
+    N_star_S = (m*kN_S)/(mu_max_S - m) #equilibrium resource requirement
+    N_star_L = (m*kN_L)/(mu_max_L - m)
     P_star = 0.1*1000 # mu mol N m^-2
     if P_combo == 'S':
+        mu_max = mu_max_S
+        kN = kN_S
         N_star = N_star_S
         SN_star = (mu_max_S*N_star_S*P_star)/(N_star_S + kN_S)
     elif P_combo == 'L':
+        kN = kN_L
+        mu_max = mu_max_L
         N_star = N_star_L
         SN_star = (mu_max_L*N_star*P_star)/(N_star + kN_L)
 
@@ -335,7 +339,7 @@ def FE_upwind_2D_adv_diff_eddy_NP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter_
     for t in np.arange(0,num_steps): # number of time steps
         time = time + del_t
 
-        if t%100 == 0:
+        if t%10 == 0:
             print(t)
 
         P_n1 = P_n.copy()
@@ -390,6 +394,8 @@ def FE_upwind_2D_adv_diff_eddy_NPP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter
 
     # Set up background nutrient concentration and supply rate
     m = death_rate/(24*60*60)
+    N_star_S = (m*kN_S)/(mu_max_S - m) #equilibrium resource requirement
+    N_star_L = (m*kN_L)/(mu_max_L - m)
     N_star = N_star_S + N_star_L
     P_star_S = 0.1*1000
     if P_combo == 'SLe': #even initial concentrations of small & large
@@ -418,7 +424,7 @@ def FE_upwind_2D_adv_diff_eddy_NPP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter
     for t in np.arange(0,num_steps): # number of time steps
         time = time + del_t
 
-        if t%100 == 0:
+        if t%10 == 0:
             print(t)
 
         PL_n1 = PL_n.copy()
