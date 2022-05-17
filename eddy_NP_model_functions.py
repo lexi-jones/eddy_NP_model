@@ -401,7 +401,7 @@ def FE_upwind_2D_adv_diff_eddy_NPP_model(Lx,Ly,del_x,del_y,del_t,num_steps,alter
     if P_combo == 'SLe': #even initial concentrations of small & large
         P_star_L = 0.1*1000
     elif P_combo == 'SLu': # large population is 1/5th the size of the small
-        P_star_L = (0.1/5)*1000
+        P_star_L = (0.1/10)*1000
     SN_star = (mu_max_S*N_star*P_star_S)/(N_star + kN_S) + (mu_max_L*N_star*P_star_L)/(N_star + kN_L)
 
     # Initialize the tracers & set up the matrices to save the data
