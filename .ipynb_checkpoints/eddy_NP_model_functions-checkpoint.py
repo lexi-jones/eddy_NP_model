@@ -592,6 +592,7 @@ def concentration_sum_fig(numP,del_t,psi_2D,all_P,N_2D):
     ax[1].set_xlabel('Time Step (%s s)'%(del_t),fontsize=18)
     ax[1].set_ylabel('$\sum_{i,j} N^n (\mu M N)$',fontsize=18)
       
+    #ax[0].set_xticks(fontsize=12)
     ax[0].tick_params(axis='both', which='major', labelsize=14)
     ax[1].tick_params(axis='both', which='major', labelsize=14)
     
